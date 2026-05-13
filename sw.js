@@ -1,7 +1,8 @@
 // FORGE service worker — offline-first.
-// Cache versioning: bump CACHE on any deploy so stale assets get evicted.
+// v2 — bump cache version, never cache redirected/non-200 responses,
+// network-first for navigation so a broken cache can self-heal.
 
-const CACHE = 'forge-v1';
+const CACHE = 'forge-v2';
 const SHELL = [
   '/',
   '/index.html',
@@ -16,62 +17,85 @@ const SHELL = [
   '/icons/icon-maskable-512.png',
 ];
 
+// Only cache "fresh-from-the-server, 200 OK, not-a-redirect" responses.
+// Anything else (auth pages, redirects, opaque CDN errors) is poison.
+function isCacheable(res) {
+  return res
+    && res.status === 200
+    && !res.redirected
+    && (res.type === 'basic' || res.type === 'cors');
+}
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {/* tolerate missing files */}))
+    caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {/* tolerate missing */}))
   );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  e.waitUntil((async () => {
+    // Wipe ALL old caches, not just the previous version. Guarantees a
+    // borked v1 cache from the auth-protection era cannot bleed through.
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
-  // For navigation requests, serve the cached shell (SPA fallback).
+  // Navigation: NETWORK FIRST. If a previous deploy poisoned the shell cache,
+  // a fresh fetch will overwrite it. Fall back to cached shell only when
+  // truly offline.
   if (e.request.mode === 'navigate') {
-    e.respondWith(
-      caches.match('/index.html').then((cached) => cached || fetch(e.request))
-    );
+    e.respondWith((async () => {
+      try {
+        const res = await fetch(e.request);
+        if (isCacheable(res)) {
+          const c = await caches.open(CACHE);
+          c.put('/index.html', res.clone());
+        }
+        return res;
+      } catch {
+        const cached = await caches.match('/index.html');
+        return cached || new Response('offline', { status: 503 });
+      }
+    })());
     return;
   }
 
-  // Stale-while-revalidate for app shell + same-origin assets.
+  // Same-origin assets: stale-while-revalidate, only writing CACHEABLE responses.
   if (url.origin === location.origin) {
-    e.respondWith(
-      caches.match(e.request).then((cached) => {
-        const network = fetch(e.request).then((res) => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, clone));
-          }
-          return res;
-        }).catch(() => cached);
-        return cached || network;
-      })
-    );
+    e.respondWith((async () => {
+      const cached = await caches.match(e.request);
+      const network = fetch(e.request).then(async (res) => {
+        if (isCacheable(res)) {
+          const c = await caches.open(CACHE);
+          c.put(e.request, res.clone());
+        }
+        return res;
+      }).catch(() => cached);
+      return cached || network;
+    })());
     return;
   }
 
   // Cross-origin (fonts, react CDN, dexie): cache-first.
-  e.respondWith(
-    caches.match(e.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(e.request).then((res) => {
-        if (res.ok && res.type === 'basic' || res.type === 'cors') {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      }).catch(() => cached);
-    })
-  );
+  e.respondWith((async () => {
+    const cached = await caches.match(e.request);
+    if (cached) return cached;
+    try {
+      const res = await fetch(e.request);
+      if (isCacheable(res)) {
+        const c = await caches.open(CACHE);
+        c.put(e.request, res.clone());
+      }
+      return res;
+    } catch {
+      return cached || Response.error();
+    }
+  })());
 });
