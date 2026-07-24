@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FORGE</string>
+    <string name="title_activity_main">FORGE</string>
+    <string name="package_name">com.forge.habits</string>
+    <string name="custom_url_scheme">com.forge.habits</string>
+</resources>

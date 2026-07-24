@@ -53,13 +53,23 @@
     }
   </style>
 
-  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/dexie@4.0.7/dist/dexie.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+  <!-- Vendored locally (pinned: react@18.3.1, react-dom@18.3.1, dexie@4.0.7,
+       @babel/standalone@7.29.0) so the app boots offline and inside the
+       Capacitor WebView without network. -->
+  <script src="/vendor/react.production.min.js"></script>
+  <script src="/vendor/react-dom.production.min.js"></script>
+  <script src="/vendor/dexie.min.js"></script>
+  <script src="/vendor/babel.min.js"></script>
 
-  <!-- Vercel Web Analytics (static site mode) -->
-  <script defer src="/_vercel/insights/script.js"></script>
+  <!-- Vercel Web Analytics — web only, skipped in the native app -->
+  <script>
+    if (!window.Capacitor) {
+      const s = document.createElement('script');
+      s.defer = true;
+      s.src = '/_vercel/insights/script.js';
+      document.head.appendChild(s);
+    }
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -72,7 +82,9 @@
 
   <!-- Register service worker (only on https or localhost) -->
   <script>
-    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    // In the native app (Capacitor) assets are already local — the SW only
+    // adds a cache layer that can serve stale files, so skip it there.
+    if (!window.Capacitor && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch((err) => console.warn('SW registration failed', err));
       });

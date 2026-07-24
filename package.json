@@ -1,0 +1,31 @@
+{
+  "name": "forge_app",
+  "version": "1.0.0",
+  "description": "Habit tracker basado en identidad. PWA instalable en Android / iOS sin tienda\r de apps, con persistencia offline en IndexedDB.",
+  "main": "db.js",
+  "scripts": {
+    "stage": "node scripts/stage-www.mjs",
+    "sync": "npm run stage && npx cap sync android",
+    "android:open": "npm run sync && npx cap open android",
+    "android:build": "npm run sync && cd android && gradlew assembleDebug"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HambuP/forge_app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/HambuP/forge_app/issues"
+  },
+  "homepage": "https://github.com/HambuP/forge_app#readme",
+  "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/core": "^8.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.4.2"
+  }
+}
