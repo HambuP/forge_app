@@ -1074,10 +1074,27 @@ function IdentitiesScreen({ onBack, data, refresh }) {
 function SettingsScreen({ onBack, data, refresh }) {
   const [rh, setRh] = useState(data.settings.rolloverHour ?? 3);
   const [mh, setMh] = useState(data.settings.moodPromptHour ?? 20);
+  const [nhOn, setNhOn] = useState(!!data.settings.notifHabitsEnabled);
+  const [nhHour, setNhHour] = useState(data.settings.notifHabitsHour ?? 9);
+  const [nmOn, setNmOn] = useState(!!data.settings.notifMoodEnabled);
 
   const save = async (key, value) => {
     await db.settings.put({ key, value });
     refresh();
+  };
+
+  // Notifications only exist in the native app; on web ForgeNotifications is
+  // an inert stub with available=false and the whole section stays hidden.
+  const notifs = window.ForgeNotifications;
+
+  const toggleNotif = async (key, value, setLocal) => {
+    if (value && !(await notifs.ensurePermission())) {
+      alert('FORGE no tiene permiso de notificaciones.\n\nActívalo en Ajustes → Aplicaciones → FORGE → Notificaciones y vuelve a intentar.');
+      return;
+    }
+    setLocal(value);
+    await save(key, value);
+    notifs.resync();
   };
 
   const exportData = async () => {
@@ -1214,13 +1231,53 @@ function SettingsScreen({ onBack, data, refresh }) {
       >
         <NumberStepper
           value={mh}
-          setValue={(v) => { setMh(v); save('moodPromptHour', v); }}
+          setValue={(v) => { setMh(v); save('moodPromptHour', v); notifs.resync(); }}
           min={18}
           max={23}
           suffix={mh >= 12 ? 'pm' : 'am'}
           format={v => v > 12 ? v - 12 : v}
         />
       </Setting>
+
+      {notifs.available && (
+        <>
+          <Setting
+            label="notificación diaria de hábitos"
+            sub="un recordatorio para no romper la cadena"
+          >
+            <ToggleSwitch
+              on={nhOn}
+              onChange={(v) => toggleNotif('notifHabitsEnabled', v, setNhOn)}
+            />
+          </Setting>
+
+          {nhOn && (
+            <Setting
+              label="hora del recordatorio"
+              sub="llega aproximada, no al minuto (ahorra batería)"
+            >
+              <NumberStepper
+                value={nhHour}
+                setValue={(v) => { setNhHour(v); save('notifHabitsHour', v).then(() => notifs.resync()); }}
+                min={0}
+                max={23}
+                suffix={nhHour >= 12 ? 'pm' : 'am'}
+                format={v => v === 0 ? 12 : v > 12 ? v - 12 : v}
+              />
+            </Setting>
+          )}
+
+          <Setting
+            label="notificación de ánimo"
+            sub="aviso a la hora del mood revisador"
+          >
+            <ToggleSwitch
+              on={nmOn}
+              onChange={(v) => toggleNotif('notifMoodEnabled', v, setNmOn)}
+            />
+          </Setting>
+        </>
+      )}
 
       <div style={{ height: 1, background: C.hairline, margin: '24px 0' }} />
 
@@ -1376,6 +1433,27 @@ const Setting = ({ label, sub, children }) => (
       {children}
     </div>
   </div>
+);
+
+const ToggleSwitch = ({ on, onChange }) => (
+  <button
+    onClick={() => onChange(!on)}
+    aria-pressed={on}
+    style={{
+      width: 42, height: 24, borderRadius: 12, padding: 0, flexShrink: 0,
+      border: `1px solid ${on ? 'transparent' : C.hairlineStrong}`,
+      background: on ? C.ink : 'transparent',
+      position: 'relative', cursor: 'pointer',
+      transition: 'background 160ms ease, border-color 160ms ease',
+    }}
+  >
+    <span style={{
+      position: 'absolute', top: 2, left: on ? 20 : 2,
+      width: 18, height: 18, borderRadius: '50%',
+      background: on ? C.bg : C.ink50,
+      transition: 'left 160ms ease, background 160ms ease',
+    }} />
+  </button>
 );
 
 const NumberStepper = ({ value, setValue, min, max, suffix, format }) => {

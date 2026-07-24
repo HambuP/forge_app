@@ -10,6 +10,7 @@ const FILES = [
   'app.jsx',
   'components.jsx',
   'db.js',
+  'notifications.js',
   'logic.js',
   'manifest.webmanifest',
   'sw.js',
