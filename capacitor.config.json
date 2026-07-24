@@ -1,5 +1,11 @@
 {
   "appId": "com.forge.habits",
   "appName": "FORGE",
-  "webDir": "www"
+  "webDir": "www",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_forge",
+      "iconColor": "#ECEBE5"
+    }
+  }
 }

@@ -1,2 +1,4 @@
 node_modules/
 www/
+# Credenciales de firma — NUNCA commitear (contiene la contraseña del keystore)
+android/keystore.properties
